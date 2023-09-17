@@ -1,0 +1,49 @@
+model User {
+    id#number/primary
+    email#string/max_length=255/unique/!empty
+    password#string/max_length=30/!empty
+}
+
+model ChatMessage {
+    id#number/primary
+    text#string/max_length=255/!empty
+    user#<User|email>/!empty
+}
+
+model File {
+    id#number/primary
+    name#string/!empty
+    type#string/!empty
+    size#number/!empty
+    path#string/!empty
+}
+
+service UserService<User>#postgresql?pool {
+    get get(id#string)#<User>/error=false/after=after_get/validate_query=validate_query_get?rate_limit=5
+    get get_all()#<User>[]/error=false/before=before_get_all/after=after_get_all?cache?sort_key=<User|id>?sort_dir=asc?pagination
+    post create(email#string, password#string)#<User>/before=before_create/after=after_create/validate_body=validate_body_create?auth?atomic
+    post avatar(profilePicture#<File>)#<File>?file=local
+    get get_file(id#string)#<File>?filefile=local
+    post document(profilePicture#<File>)#<File>?file=amazon_service_name_in_config
+    get get_document(id#string)#<File>?filefile=amazon_service_name_in_config
+
+    @validate_get_query(id#string)
+    @after_get(data#<User>)#<User>
+
+    @before_get_all()#number
+    @after_get_all(data#<User>[])#<User>[]
+
+    @before_create(email#string, password#string)#void
+    @after_create(data#<User>)#void
+    @validate_body_create(email#string, password#string)
+}
+
+service ChatService<ChatMessage>#postgresql {
+    get get_recent_messages(limit#number)#<ChatMessage>[]/error=false
+    post send_message(user#<User|email>, text#string)#<ChatMessage>/validate_body=validate_body_live_chat?auth
+
+    // WebSocket definitions
+    ws live_chat(user#<User|email>)#void/error=error_live_chat?auth
+
+    @validate_body_live_chat(user#<User|email>, text#string)
+}
